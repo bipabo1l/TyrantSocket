@@ -6,6 +6,9 @@ import (
 )
 
 func main() {
+	beego.SetStaticPath("/layui", "/static/layui")
+	beego.BConfig.WebConfig.TemplateLeft = "{{{"
+	beego.BConfig.WebConfig.TemplateRight = "}}}"
 	beego.Run()
 }
 
