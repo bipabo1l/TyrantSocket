@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/MXi4oyu/MoonSocket/protocol"
+	"github.com/bipabo1l/TyrantSocket/protocol"
 )
 
 func main() {

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mxi4oyu/MoonSocket/protocol"
+	"github.com/bipabo1l/TyrantSocket/protocol"
 )
 
 var msgList = make([]string, 100)
