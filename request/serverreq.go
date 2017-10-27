@@ -15,7 +15,7 @@ func (d *ServiceReq) QueryStatus() []byte {
 		//设置超时机制
 		Timeout: 3 * time.Second,
 	}
-	url := "http://localhost:8849/?key=getstatus"
+	url := "http://192.168.0.8:8849/?key=getstatus"
 	req, err := http.NewRequest("GET", url, nil)
 	log.Println(err)
 	if err != nil {

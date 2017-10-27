@@ -22,7 +22,7 @@ func main() {
 
 func sendMsgToServer() {
 	//动态传入服务端IP和端口号
-	service := "127.0.0.1:8848"
+	service := "192.168.0.8:8848"
 
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", service)
 

@@ -47,7 +47,7 @@ var TmpList = make([]string, 10)
 
 func main() {
 
-	server_listener, err := net.Listen("tcp", "localhost:8848")
+	server_listener, err := net.Listen("tcp", "192.168.0.8:8848")
 
 	CheckError(err)
 
