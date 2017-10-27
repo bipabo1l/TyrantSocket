@@ -1,0 +1,36 @@
+{{{template "common/header.html" .}}}
+
+<span class="layui-breadcrumb" lay-separator="->">
+  <a href="javascript:void(0)">首页</a>
+  <a><cite>Agent信息</cite></a>
+</span>
+
+<table class="layui-hide" id="LAY_table_user" lay-filter="eventList"></table>
+
+<script>
+    layui.use(['element', 'table', 'form', 'laydate', 'laytpl'], function (args) {
+        var element = layui.element;
+        var table = layui.table;
+        var form = layui.form;
+        var $ = layui.jquery;
+        var laydate = layui.laydate;
+
+        //方法级渲染
+        table.render({
+            elem: '#LAY_table_user'
+            , url: '/agentstatus'
+            , cols: [[
+                {field: 'agent', title: 'agent', width: 187},
+                {field: 'status', title: 'status', width: 187}
+            ]]
+            , id: 'eventListReload'
+            , page: true
+            , height: 'full-90'
+            , done: function () {
+                element.init();
+            }
+        });
+    });
+</script>
+
+{{{template "common/footer.html" .}}}

@@ -23,12 +23,12 @@ func (this *AgentController) GetAgent(){
 // @router /agentstatus [get]
 func (this *AgentController) Get() {
 	var agentSercver models.AgentServer
-	result, err := agentSercver.GetStatus()
+	result, num ,err := agentSercver.GetStatus()
 	if err != nil {
 		log.Println("GetStatus 接口调用错误")
-		this.Data["json"] = utils.AjaxReturn(result, "result invalid", -1)
+		this.Data["json"] = utils.AjaxReturn(result, "result invalid", 0)
 	} else {
-		this.Data["json"] = utils.AjaxReturn(result, "success", 1)
+		this.Data["json"] = utils.AjaxReturn(result, "success", num)
 	}
 	this.ServeJSON()
 }
