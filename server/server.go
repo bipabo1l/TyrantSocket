@@ -15,6 +15,8 @@ import (
 
 var msgList = make([]string, 100)
 var sign = 0
+//记录所有Agent
+var clientArr = make(map[string]net.Conn)
 
 type AgentMsg struct {
 	Session int64
@@ -47,7 +49,8 @@ var TmpList = make([]string, 10)
 
 func main() {
 
-	server_listener, err := net.Listen("tcp", "192.168.0.8:8848")
+	//server_listener, err := net.Listen("tcp", "192.168.0.8:8848")
+	server_listener, err := net.Listen("tcp", "127.0.0.1:8848")
 
 	CheckError(err)
 
@@ -60,7 +63,11 @@ func main() {
 	for {
 		new_conn, err := server_listener.Accept()
 
+		clientArr[new_conn.RemoteAddr().String()] = new_conn
+
 		CheckError(err)
+
+		log.Println(new_conn.RemoteAddr().String() + " 上线了")
 
 		go ServerMsgHandler(new_conn)
 	}
@@ -73,6 +80,15 @@ func getConn() {
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
 	}
+}
+
+type IPList struct {
+	IPPort   string   `json:"ipport"`
+	ConnList net.Conn `json:"netconn"`
+}
+
+type IPListMap struct {
+	IPListMap []IPList
 }
 
 func sayhelloName(w http.ResponseWriter, r *http.Request) {
@@ -90,14 +106,41 @@ func sayhelloName(w http.ResponseWriter, r *http.Request) {
 	//监听8849端口判断批量getStatus动作
 	if key == "key" && value == "getstatus" {
 		//向Agent发送Stauts请求
-		sign = 1
-		go func() {
-			ch1 <- 2
-		}()
+		//sign = 1
+		//go func() {
+		//	ch1 <- 2
+		//}()
+		////log.Println("sayhello函数中:" + <-ch2)
+		//fmt.Fprintf(w, <-ch2)
 
-		//log.Println("sayhello函数中:" + <-ch2)
-		fmt.Fprintf(w, <-ch2)
+		log.Println(clientArr)
 
+		data, err := json.Marshal(clientArr)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+
+		log.Println(string(data[:]))
+
+		s := strings.Split(string(data[:]), ",")
+		ll := ""
+		if len(s) > 0 {
+			for _, w := range s {
+				k := strings.Split(w, ":")
+				if len(k) > 0 && ll != "" {
+					ll = ll + "," + k[0]
+				} else if len(k) > 0 {
+					ll = k[0]
+				}
+			}
+		}
+
+		ll = strings.Replace(ll, "{", "", -1)
+		ll = strings.Replace(ll, `"`, "", -1)
+		ll = strings.Replace(ll, `}`, "", -1)
+
+		fmt.Fprintf(w, `{"Agent":"`+ll+`"}`)
 	}
 }
 
@@ -121,6 +164,8 @@ func ServerMsgHandler(conn net.Conn) {
 		if err != nil {
 
 			fmt.Println("connection close")
+			removeClient(conn)
+			conn.Close()
 			return
 		}
 
@@ -201,6 +246,7 @@ func HeartBeat(conn net.Conn, heartChan chan byte, timeout int) {
 
 //服务端向客户端发送消息
 func WriteMsgToClient(conn net.Conn) {
+	log.Println(conn.RemoteAddr())
 	talk := "RUN"
 	smsg := protocol.Enpack([]byte(talk))
 	conn.Write(smsg)
@@ -231,4 +277,13 @@ func ReadChan(readchan chan []byte) {
 			Log(string(data))
 		}
 	}
+}
+
+func removeClient(new_conn net.Conn) {
+	log.Println(clientArr)
+	log.Println(new_conn.RemoteAddr().String() + " 已经阵亡")
+	delete(clientArr, new_conn.RemoteAddr().String())
+	log.Println("delete close conn")
+	log.Println(clientArr)
+	return
 }
