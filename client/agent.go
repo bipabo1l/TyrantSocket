@@ -20,6 +20,10 @@ func main() {
 
 }
 
+//ch1 为-1时，与server端停止通信
+var ch1 = make(chan int, 1)
+var ch2 = make(chan string, 1)
+
 func sendMsgToServer() {
 	//动态传入服务端IP和端口号
 	//service := "192.168.0.8:8848"
@@ -60,6 +64,7 @@ func CheckError(err error) {
 
 //解决断线重连问题
 func doWork(conn net.Conn) error {
+	ch1 <- 1
 	ch := make(chan int, 100)
 
 	ticker := time.NewTicker(time.Second)
@@ -73,8 +78,8 @@ func doWork(conn net.Conn) error {
 		case <-ticker.C:
 			ch <- 1
 			go ClientMsgHandler(conn, ch)
-
-		case <-time.After(time.Second * 10):
+			go ReadMsg(conn, ch)
+		case <-time.After(time.Second * 2):
 			defer conn.Close()
 			fmt.Println("timeout")
 		}
@@ -89,8 +94,8 @@ func ClientMsgHandler(conn net.Conn, ch chan int) {
 
 	<-ch
 	//获取当前时间
-	msg := time.Now().String()
-	SendMsg(conn, msg)
+	//msg := "+++++++++++++++++++++++++++++++++++++"
+	SendMsg(conn, "rrrrr")
 	go ReadMsg(conn, ch)
 
 }
@@ -103,6 +108,7 @@ func GetSession() string {
 
 //接收服务端发来的消息
 func ReadMsg(conn net.Conn, ch chan int) {
+	<-ch
 
 	//存储被截断的数据
 	tmpbuf := make([]byte, 0)
@@ -120,11 +126,24 @@ func ReadMsg(conn net.Conn, ch chan int) {
 		//接收到了服务器端发来的非空包，证明已经和服务器连接成功
 		if msg == "RUN" {
 			log.Println("收到服务器命令：发送Running包")
-			go SendMsg(conn, msg)
+			go func() {
+				SendMsg(conn, msg)
+				time.Sleep(time.Second * 2)
+			}()
 		} else if msg == "GETSTATUS" {
 			//服务器端想知道当前在没在工作
 			log.Println("Server端请求了解本Agent状态")
 			go SendRunMsg(conn, msg)
+		} else if msg == "STOP" {
+			//服务器让当前agent停止
+			log.Println("服务器让当前agent停止")
+			go StopRunMsg(conn, msg)
+			//conn.Close()
+		}else if msg == "BEGIN" {
+			//服务器让当前agent停止
+			log.Println("服务器让当前agent重新连接")
+			go BeginRunMsg(conn, msg)
+			//conn.Close()
 		}
 	}
 }
@@ -134,7 +153,7 @@ func SendMsg(conn net.Conn, msg string) {
 
 	session := GetSession()
 
-	words := "{\"Session\":" + session + ",\"IP\":\"" + GetMyIP() + ",\"Message\":\"" + msg + "\",\"Status\":\"" + "running" + "\"}"
+	words := "{\"Session\":" + session + ",\"IP\":\"" + get_external() + ",\"Message\":\"" + msg + "\",\"Status\":\"" + "running" + "\"}"
 	//将信息封包
 	smsg := protocol.Enpack([]byte(words))
 	conn.Write(smsg)
@@ -145,11 +164,33 @@ func SendMsg(conn net.Conn, msg string) {
 func SendRunMsg(conn net.Conn, msg string) {
 
 	session := GetSession()
-	words := "{\"Session\":" + session + ",\"IP\":\"" + GetMyIP() + "\",\"Message\":\"" + msg + "\",\"Status\":\"" + "IAMRunning" + "\"}"
+	words := "{\"Session\":" + session + ",\"IP\":\"" + get_external() + "\",\"Message\":\"" + msg + "\",\"Status\":\"" + "IAMRunning" + "\"}"
 	//将信息封包
 	smsg := protocol.Enpack([]byte(words))
 	conn.Write(smsg)
 
+}
+
+//向服务端发送消息
+func StopRunMsg(conn net.Conn, msg string) {
+
+	session := GetSession()
+	words := "{\"Session\":" + session + ",\"IP\":\"" + get_external() + "\",\"Message\":\"" + msg + "\",\"Status\":\"" + "STOPPED" + "\"}"
+	//将信息封包
+	smsg := protocol.Enpack([]byte(words))
+	conn.Write(smsg)
+	log.Println("----------------------------------")
+	conn.Close()
+}
+
+//向服务端发送消息
+func BeginRunMsg(conn net.Conn, msg string) {
+	session := GetSession()
+	words := "{\"Session\":" + session + ",\"IP\":\"" + get_external() + "\",\"Message\":\"" + msg + "\",\"Status\":\"" + "Begin" + "\"}"
+	//将信息封包
+	smsg := protocol.Enpack([]byte(words))
+	conn.Write(smsg)
+	log.Println("----------------------------------")
 }
 
 func GetMyIP() string {
@@ -180,8 +221,8 @@ func get_external() string {
 	}
 	defer resp.Body.Close()
 	content, _ := ioutil.ReadAll(resp.Body)
-	//buf := new(bytes.Buffer)
-	//buf.ReadFrom(resp.Body)
-	//s := buf.String()
+	log.Println("++++++++++++++++++++++++++++++++++++++++++++")
+	log.Println(string(content))
 	return string(content)
+
 }

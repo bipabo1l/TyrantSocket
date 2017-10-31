@@ -18,3 +18,8 @@ func (c *MainController) Get() {
 func (this *MainController) GetPageCVE() {
 	this.TplName = "getStatus.html"
 }
+
+// @router /main1/ [get]
+func (this *MainController) Main() {
+	this.TplName = "main.html"
+}

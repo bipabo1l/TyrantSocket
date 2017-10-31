@@ -13,8 +13,6 @@ import (
 	"github.com/bipabo1l/TyrantSocket/protocol"
 )
 
-var msgList = make([]string, 100)
-var sign = 0
 //记录所有Agent
 var clientArr = make(map[string]net.Conn)
 
@@ -43,9 +41,6 @@ func Log(v ...interface{}) {
 }
 
 var ch1 = make(chan int, 1)
-var ch2 = make(chan string, 1)
-
-var TmpList = make([]string, 10)
 
 func main() {
 
@@ -63,7 +58,14 @@ func main() {
 	for {
 		new_conn, err := server_listener.Accept()
 
-		clientArr[new_conn.RemoteAddr().String()] = new_conn
+		clientIPList := strings.Split(new_conn.RemoteAddr().String(), ":")
+
+		clientIP := new_conn.RemoteAddr().String()
+		if len(clientIPList) > 0 {
+			clientIP = clientIPList[0]
+		}
+		log.Println(clientIP)
+		clientArr[clientIP] = new_conn
 
 		CheckError(err)
 
@@ -102,27 +104,14 @@ func sayhelloName(w http.ResponseWriter, r *http.Request) {
 			value = strings.Join(v, "")
 		}
 	}
-	log.Println(key + "--" + value)
+
 	//监听8849端口判断批量getStatus动作
 	if key == "key" && value == "getstatus" {
-		//向Agent发送Stauts请求
-		//sign = 1
-		//go func() {
-		//	ch1 <- 2
-		//}()
-		////log.Println("sayhello函数中:" + <-ch2)
-		//fmt.Fprintf(w, <-ch2)
-
-		log.Println(clientArr)
-
 		data, err := json.Marshal(clientArr)
 		if err != nil {
 			log.Println(err)
 			return
 		}
-
-		log.Println(string(data[:]))
-
 		s := strings.Split(string(data[:]), ",")
 		ll := ""
 		if len(s) > 0 {
@@ -130,17 +119,49 @@ func sayhelloName(w http.ResponseWriter, r *http.Request) {
 				k := strings.Split(w, ":")
 				if len(k) > 0 && ll != "" {
 					ll = ll + "," + k[0]
+					ll = strings.Replace(ll, "{", "", -1)
+					ll = strings.Replace(ll, `"`, "", -1)
+					ll = strings.Replace(ll, `}`, "", -1)
 				} else if len(k) > 0 {
 					ll = k[0]
+					ll = strings.Replace(ll, "{", "", -1)
+					ll = strings.Replace(ll, `"`, "", -1)
+					ll = strings.Replace(ll, `}`, "", -1)
 				}
 			}
 		}
 
-		ll = strings.Replace(ll, "{", "", -1)
-		ll = strings.Replace(ll, `"`, "", -1)
-		ll = strings.Replace(ll, `}`, "", -1)
-
 		fmt.Fprintf(w, `{"Agent":"`+ll+`"}`)
+	}
+
+	//令agent停止命令
+	if key == "key" && protocol.Substr2(value, 0, 4) == "stop" {
+
+		ip := protocol.Substr2(value, 4, len(value))
+
+		log.Println("-----------------------------")
+		log.Println(clientArr)
+
+		findConn := clientArr[ip]
+
+		go StopClient(findConn)
+
+		fmt.Fprintf(w, "1")
+	}
+
+	//令agent开启命令
+	if key == "key" && protocol.Substr2(value, 0, 5) == "start" {
+
+		ip := protocol.Substr2(value, 5, len(value))
+
+		log.Println("-----------------------------")
+		log.Println(clientArr)
+
+		findConn := clientArr[ip]
+
+		go BeginClient(findConn)
+
+		fmt.Fprintf(w, "1")
 	}
 }
 
@@ -178,39 +199,8 @@ func ServerMsgHandler(conn net.Conn) {
 		//判断解析json
 		var agentmsg AgentMsg
 		json.Unmarshal([]byte(string(tmpbuf)), &agentmsg)
-		//agentmsg 客户端发送的struct
-		if agentmsg.Status == "IAMRunning" {
-			log.Println("有Agent正在运行")
-			log.Println("Agent IP:" + agentmsg.IP)
-			sign1 := 0
-			for _, w := range TmpList {
-				if w == agentmsg.IP {
-					sign1 = 1
-				}
-			}
-			if sign1 == 0 {
-				TmpList = append(TmpList, agentmsg.IP)
-			}
-		}
-		ll := ""
-		for _, v := range TmpList {
-			if v != "" && ll != "" {
-				ll = ll + "," + v
-			} else if v != "" {
-				ll = v
-			}
-		}
-		statusMsg := `{"Agent":"` + ll + `"}`
-		//返回的信息
-		log.Println(statusMsg)
-
-		if len(ll) > 0 {
-			go func(statusMsg string) {
-				ch2 <- statusMsg
-			}(statusMsg)
-		}
-
 		Msg := tmpbuf
+		log.Println(agentmsg.Status)
 
 		//向客户端发送消息
 		go WriteMsgToClient(conn)
@@ -220,6 +210,8 @@ func ServerMsgHandler(conn net.Conn) {
 				WriteMsgToClient2(conn)
 			}
 		}()
+
+
 
 		beatch := make(chan byte)
 		//心跳计时，默认30秒
@@ -256,7 +248,20 @@ func WriteMsgToClient2(conn net.Conn) {
 	talk := "GETSTATUS"
 	smsg := protocol.Enpack([]byte(talk))
 	conn.Write(smsg)
-	sign = 0
+}
+
+//Server表示不想跟您通信咯
+func StopClient(conn net.Conn) {
+	talk := "STOP"
+	smsg := protocol.Enpack([]byte(talk))
+	conn.Write(smsg)
+}
+
+//Server表示不想跟您通信咯
+func BeginClient(conn net.Conn) {
+	talk := "BEGIN"
+	smsg := protocol.Enpack([]byte(talk))
+	conn.Write(smsg)
 }
 
 //处理心跳channel
