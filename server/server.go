@@ -11,10 +11,23 @@ import (
 	"time"
 
 	"github.com/bipabo1l/TyrantSocket/protocol"
+	"github.com/benmanns/goworker"
+	"sync"
+	"TyrantSocket/lib"
 )
 
 //记录所有Agent
 var clientArr = make(map[string]net.Conn)
+
+var waitgroup sync.WaitGroup
+var mIPRangePool lib.MongoDriver
+var is_private int
+var scan_mode_param string
+var is_limit_scan_rate bool
+
+type IPRangePool struct {
+	IPRange string `bson:"ip_range"`
+}
 
 type AgentMsg struct {
 	Session int64
@@ -23,6 +36,58 @@ type AgentMsg struct {
 	Status  string
 }
 
+func init() {
+
+	cfg := lib.NewConfigUtil("")
+	redis_host, _ := cfg.GetString("redis_default", "host")
+	redis_port, _ := cfg.GetString("redis_default", "port")
+	redis_pass, _ := cfg.GetString("redis_default", "pass")
+	redis_db, _ := cfg.GetString("redis_default", "db")
+
+	var dsn_addr string
+	if redis_pass != "" {
+		dsn_addr = fmt.Sprintf("redis://:%s@%s:%s/%s", redis_pass, redis_host, redis_port, redis_db)
+	} else {
+		dsn_addr = fmt.Sprintf("redis://%s:%s/%s", redis_host, redis_port, redis_db)
+	}
+
+	// 初始化
+	settings := goworker.WorkerSettings{
+		URI:            dsn_addr,
+		Connections:    100,
+		Queues:         []string{"scannerQueue", "ScanPortQuene"},
+		UseNumber:      true,
+		ExitOnComplete: false,
+		Concurrency:    2,
+		Namespace:      "goradar:",
+		Interval:       5.0,
+	}
+
+	goworker.SetSettings(settings)
+
+	// 初始化数据库连接
+	mIPRangePool = lib.MongoDriver{TableName: "ip_range_pool"}
+	err := mIPRangePool.Init()
+	if err != nil {
+		fmt.Println("INIT MONGODB ERRPR:" + err.Error())
+	}
+
+	//initialize deploy mode
+	deploy, _ := cfg.GetString("server_default", "deploy")
+	if deploy == "inner" {
+
+		is_private = 1
+		scan_mode_param = "q"
+		is_limit_scan_rate = true
+	} else if deploy == "outer" {
+		is_private = 2
+		scan_mode_param = "d"
+		is_limit_scan_rate = false
+	} else {
+		fmt.Println("config server_defaul->deploy error: only 'inner' or 'outer' allowed")
+		os.Exit(1)
+	}
+}
 //定义CheckError方法，避免写太多到 if err!=nil
 func CheckError(err error) {
 
@@ -149,7 +214,7 @@ func sayhelloName(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "1")
 	}
 
-	//令agent开启命令
+	//令agentkaiq
 	if key == "key" && protocol.Substr2(value, 0, 5) == "start" {
 
 		ip := protocol.Substr2(value, 5, len(value))
@@ -159,7 +224,7 @@ func sayhelloName(w http.ResponseWriter, r *http.Request) {
 
 		findConn := clientArr[ip]
 
-		go BeginClient(findConn)
+		go StopClient(findConn)
 
 		fmt.Fprintf(w, "1")
 	}
@@ -253,13 +318,6 @@ func WriteMsgToClient2(conn net.Conn) {
 //Server表示不想跟您通信咯
 func StopClient(conn net.Conn) {
 	talk := "STOP"
-	smsg := protocol.Enpack([]byte(talk))
-	conn.Write(smsg)
-}
-
-//Server表示不想跟您通信咯
-func BeginClient(conn net.Conn) {
-	talk := "BEGIN"
 	smsg := protocol.Enpack([]byte(talk))
 	conn.Write(smsg)
 }

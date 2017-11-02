@@ -7,6 +7,12 @@
 
 <table class="layui-hide" id="LAY_table_user" lay-filter="eventList"></table>
 
+<script type="text/html" id="barDemo">
+    <a class="layui-btn layui-btn-mini layui-btn-primary" lay-event="delete">停止</a>
+    <a class="layui-btn layui-btn-mini layui-btn-primary" lay-event="sort">重启</a>
+
+</script>
+
 <script>
     layui.use(['element', 'table', 'form', 'laydate', 'laytpl'], function (args) {
         var element = layui.element;
@@ -22,6 +28,7 @@
             , cols: [[
                 {field: 'agent', title: 'agent', width: 187},
                 {field: 'status', title: 'status', width: 187}
+                , {fixed: 'right', width: 260, align: 'right', toolbar: '#barDemo'}
             ]]
             , id: 'eventListReload'
             , page: true
@@ -30,7 +37,42 @@
                 element.init();
             }
         });
+
+        //监听工具条
+        table.on('tool(eventList)', function (obj) { //注：tool是工具条事件名，test是table原始容器的属性 lay-filter="对应的值"
+            var data = obj.data; //获得当前行数据
+            var layEvent = obj.event; //获得 lay-event 对应的值
+            var tr = obj.tr; //获得当前行 tr 的DOM对象
+            if (layEvent === 'delete') {
+                layer.confirm('您确定暂停（' + data.agent + '）该服务器吗？', {
+                    btn: ['确定', '取消'] //按钮
+                }, function () {
+                    layer.load(1)
+                    $.ajax({
+                        url: '/stop'
+                        ,
+                        data: {
+                            'ip': data.agent
+                        }
+                        ,
+                        type: 'post'
+                        ,
+                        success: function (data) {
+                            layer.closeAll();
+                            if (data.code == 1) {
+                                $(".layui-laypage-btn")[0].click();
+                            } else {
+                            }
+                            layer.msg(data.msg);
+                        }
+                    });
+                }, function () {
+                });
+            }
+        });
     });
+
+
 </script>
 
 {{{template "common/footer.html" .}}}

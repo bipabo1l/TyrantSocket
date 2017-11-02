@@ -23,6 +23,22 @@ func init() {
 			MethodParams: param.Make(),
 			Params: nil})
 
+	beego.GlobalControllerRouter["TyrantSocket/controllers:AgentController"] = append(beego.GlobalControllerRouter["TyrantSocket/controllers:AgentController"],
+		beego.ControllerComments{
+			Method: "Post",
+			Router: `/stop`,
+			AllowHTTPMethods: []string{"post"},
+			MethodParams: param.Make(),
+			Params: nil})
+
+	beego.GlobalControllerRouter["TyrantSocket/controllers:AgentController"] = append(beego.GlobalControllerRouter["TyrantSocket/controllers:AgentController"],
+		beego.ControllerComments{
+			Method: "Range",
+			Router: `/agentiprange`,
+			AllowHTTPMethods: []string{"get"},
+			MethodParams: param.Make(),
+			Params: nil})
+
 	beego.GlobalControllerRouter["TyrantSocket/controllers:MainController"] = append(beego.GlobalControllerRouter["TyrantSocket/controllers:MainController"],
 		beego.ControllerComments{
 			Method: "Get",
@@ -35,6 +51,14 @@ func init() {
 		beego.ControllerComments{
 			Method: "GetPageCVE",
 			Router: `/main/`,
+			AllowHTTPMethods: []string{"get"},
+			MethodParams: param.Make(),
+			Params: nil})
+
+	beego.GlobalControllerRouter["TyrantSocket/controllers:MainController"] = append(beego.GlobalControllerRouter["TyrantSocket/controllers:MainController"],
+		beego.ControllerComments{
+			Method: "Main",
+			Router: `/main1/`,
 			AllowHTTPMethods: []string{"get"},
 			MethodParams: param.Make(),
 			Params: nil})

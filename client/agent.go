@@ -16,15 +16,52 @@ import (
 
 func main() {
 
-	sendMsgToServer()
+	go func() {
+		//干活
+		for {
+			log.Println("++++++++++++干活中++++++++++++++++")
+		}
+
+	}()
+
+	go func() {
+		ggggggggggggggggg()
+	}()
 
 }
 
 //ch1 为-1时，与server端停止通信
 var ch1 = make(chan int, 1)
 var ch2 = make(chan string, 1)
+//ch1 为-1时，与server端停止通信
+var chSign = make(chan int, 1)
 
 func sendMsgToServer() {
+
+	go func() {
+		//干活
+		for {
+
+			select {
+			case <-chSign:
+				if <-chSign != -1 {
+
+				}
+			case <-time.After(time.Second * 3):
+				log.Println("++++++++++++干活中++++++++++++++++")
+			}
+
+		}
+
+	}()
+
+	go func() {
+		ggggggggggggggggg()
+	}()
+
+}
+
+func ggggggggggggggggg() {
 	//动态传入服务端IP和端口号
 	//service := "192.168.0.8:8848"
 	service := "127.0.0.1:8848"
@@ -139,7 +176,7 @@ func ReadMsg(conn net.Conn, ch chan int) {
 			log.Println("服务器让当前agent停止")
 			go StopRunMsg(conn, msg)
 			//conn.Close()
-		}else if msg == "BEGIN" {
+		} else if msg == "BEGIN" {
 			//服务器让当前agent停止
 			log.Println("服务器让当前agent重新连接")
 			go BeginRunMsg(conn, msg)
@@ -180,7 +217,7 @@ func StopRunMsg(conn net.Conn, msg string) {
 	smsg := protocol.Enpack([]byte(words))
 	conn.Write(smsg)
 	log.Println("----------------------------------")
-	conn.Close()
+	//conn.Close()
 }
 
 //向服务端发送消息
