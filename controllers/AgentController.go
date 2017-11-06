@@ -45,10 +45,11 @@ func (this *AgentController) Post() {
 	this.ServeJSON()
 }
 
-// @router /agentiprange [get]
+// @router /agentiprange/:ip [get]
 func (this *AgentController) Range() {
 	var agentSercver models.AgentServer
-	result,  err := agentSercver.GetIPRange()
+	ip := string(this.Ctx.Input.Param(":ip"))
+	result, err := agentSercver.GetIPRange(ip)
 	if err != nil {
 		log.Println("GetIPRange 接口调用错误")
 		this.Data["json"] = utils.AjaxReturn(result, "result invalid", 0)

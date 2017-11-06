@@ -59,12 +59,12 @@ func (d *ServiceReq) StopStatus(ip string) error {
 
 }
 
-func (d *ServiceReq) GetRange() []byte {
+func (d *ServiceReq) GetRange(ip string) []byte {
 	client := &http.Client{
 		//设置超时机制
 		Timeout: 3 * time.Second,
 	}
-	url := "http://192.168.0.8:8849/?key=getiprange"
+	url := "http://192.168.0.8:8849/?key=getiprange" + ip
 	log.Println(url)
 	req, err := http.NewRequest("GET", url, nil)
 	log.Println(err)

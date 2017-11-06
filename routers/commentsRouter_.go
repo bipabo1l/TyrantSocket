@@ -34,7 +34,7 @@ func init() {
 	beego.GlobalControllerRouter["TyrantSocket/controllers:AgentController"] = append(beego.GlobalControllerRouter["TyrantSocket/controllers:AgentController"],
 		beego.ControllerComments{
 			Method: "Range",
-			Router: `/agentiprange`,
+			Router: `/agentiprange/:ip`,
 			AllowHTTPMethods: []string{"get"},
 			MethodParams: param.Make(),
 			Params: nil})

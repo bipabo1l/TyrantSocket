@@ -57,9 +57,9 @@ func (this *AgentServer) StopStatus(ip string) (error) {
 	return err
 }
 
-func (this *AgentServer) GetIPRange() (AgentIPRange, error) {
+func (this *AgentServer) GetIPRange(ip string) (AgentIPRange, error) {
 	var mServiceReq = new(request.ServiceReq)
-	kkk := mServiceReq.GetRange()
+	kkk := mServiceReq.GetRange(ip)
 	var agentiprange AgentIPRange
 	err := json.Unmarshal(kkk, &agentiprange)
 	if err != nil {
