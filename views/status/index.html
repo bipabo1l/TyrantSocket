@@ -79,7 +79,7 @@
             if (layEvent === 'look') {
                 $.get('/agentiprange/' + data.agent, function (d) {
                     layer.open({
-                        title: data.ip + " current run ip"
+                        title: data.agent + " current run ip"
                         , content: d.data.iprange
                     });
                 });

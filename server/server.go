@@ -1,33 +1,39 @@
 package main
 
 import (
+	"GoRadar/core"
+	"GoRadar/lib"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net"
-	"net/http"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
-	"github.com/bipabo1l/TyrantSocket/protocol"
 	"github.com/benmanns/goworker"
-	"sync"
-	"TyrantSocket/lib"
+	"gopkg.in/mgo.v2/bson"
+	"github.com/bipabo1l/TyrantSocket/protocol"
+	"net/http"
 )
-
-//记录所有Agent
-var clientArr = make(map[string]net.Conn)
 
 var waitgroup sync.WaitGroup
 var mIPRangePool lib.MongoDriver
 var is_private int
 var scan_mode_param string
 var is_limit_scan_rate bool
+var IPRange1 string
 
 type IPRangePool struct {
 	IPRange string `bson:"ip_range"`
 }
+
+//记录所有Agent
+var clientArr = make(map[string]net.Conn)
+var ipRangeArr = make(map[string]string)
 
 type AgentMsg struct {
 	Session int64
@@ -35,6 +41,25 @@ type AgentMsg struct {
 	Message string
 	Status  string
 }
+
+//定义CheckError方法，避免写太多到 if err!=nil
+func CheckError(err error) {
+
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Fatal error:%s", err.Error())
+
+		os.Exit(1)
+	}
+
+}
+
+//自定义log
+func Log(v ...interface{}) {
+
+	log.Println(v...)
+}
+
+var ch1 = make(chan int, 1)
 
 func init() {
 
@@ -88,29 +113,142 @@ func init() {
 		os.Exit(1)
 	}
 }
-//定义CheckError方法，避免写太多到 if err!=nil
-func CheckError(err error) {
-
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Fatal error:%s", err.Error())
-
-		os.Exit(1)
-	}
-
-}
-
-//自定义log
-func Log(v ...interface{}) {
-
-	log.Println(v...)
-}
-
-var ch1 = make(chan int, 1)
 
 func main() {
 
-	//server_listener, err := net.Listen("tcp", "192.168.0.8:8848")
-	server_listener, err := net.Listen("tcp", "127.0.0.1:8848")
+	// 加入守护进程机制
+
+	if os.Getppid() != 1 {
+		//判断当其是否是子进程，当父进程return之后，子进程会被 系统1 号进程接管
+		filePath, _ := filepath.Abs(os.Args[0])
+		//将命令行参数中执行文件路径转换成可用路径
+		cmd := exec.Command(filePath)
+		//将其他命令传入生成出的进程
+		cmd.Stdin = os.Stdin
+		//给新进程设置文件描述符，可以重定向到文件中
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		//开始执行新进程，不等待新进程退出
+		cmd.Start()
+		return
+	}
+
+	//mode_param := flag.String("mode", "q", "for quick scan: -mode q , for detail scan -mode d ;default -mode q ")
+	//if *mode_param != "q" && *mode_param != "d" {
+	//	fmt.Println("for quick scan: -mode q , for detail scan -mode d ; default -mode q")
+	//	os.Exit(1)
+	//}
+
+	waitgroup.Add(3)
+
+	go ListenMsg()
+
+	// 清理昨天数据(5分钟)
+	go func() {
+		for {
+			timer1 := time.NewTimer(time.Minute * 5)
+			<-timer1.C
+			cna := core.NewClearNotActivity()
+			cna.Clear()
+			fmt.Println("清理完成")
+		}
+	}()
+
+	// 添加任务(10分钟)
+	go func() {
+
+		// 首次运行
+		one_run := true
+
+		for {
+
+			if one_run == false {
+				timer1 := time.NewTimer(time.Minute * 10)
+				<-timer1.C
+			}
+
+			// 添加扫描任务
+			IPRangePool := new([]IPRangePool)
+			ip_range_pool, err := mIPRangePool.NewTable()
+			if err == nil {
+
+				// TODO 由于扫内网存活会造成大量Arp请求，目前暂时只扫描外网IP段
+				ip_range_pool.Find(bson.M{"is_private": is_private}).All(IPRangePool)
+				for _, ip_range := range *IPRangePool {
+
+					fmt.Println("添加一条存活探测任务:" + ip_range.IPRange)
+					// 不阻塞,增加扫描任务
+					goworker.Enqueue(&goworker.Job{
+						Queue: "ScanActivityQueue",
+						Payload: goworker.Payload{
+							Class: "ScanActivityTask",
+							Args:  []interface{}{string(ip_range.IPRange), is_limit_scan_rate},
+						},
+					})
+
+				}
+
+			} else {
+				fmt.Println("ERROR:" + err.Error())
+			}
+
+			one_run = false
+		}
+	}()
+
+	// 添加端口扫描任务(5)
+	go func() {
+
+		// 首次运行
+		one_run := true
+		for {
+
+			if one_run == false {
+				timer1 := time.NewTimer((time.Hour * 24) * 2)
+				<-timer1.C
+			}
+
+			// 添加扫描任务
+			IPRangePool := new([]IPRangePool)
+			ip_range_pool, err := mIPRangePool.NewTable()
+			if err == nil {
+
+				// TODO 由于扫外网占用大量session表，目前暂时只扫描内网
+				ip_range_pool.Find(bson.M{"is_private": is_private}).All(IPRangePool)
+				for _, ip_range := range *IPRangePool {
+					fmt.Println("添加一条端口扫描任务:" + ip_range.IPRange)
+					// 不阻塞,增加扫描任务
+					goworker.Enqueue(&goworker.Job{
+						Queue: "ScanPortQuene",
+						Payload: goworker.Payload{
+							Class: "ScanPortTask",
+							Args:  []interface{}{string(ip_range.IPRange), scan_mode_param, is_limit_scan_rate},
+						},
+					})
+				}
+
+			} else {
+				fmt.Println("ERROR:" + err.Error())
+			}
+
+			one_run = false
+		}
+	}()
+
+	waitgroup.Wait()
+
+	fmt.Println("添加任务完成")
+}
+
+////自定义log
+//func Log(v ...interface{}) {
+//
+//	log.Println(v...)
+//}
+
+func ListenMsg() {
+	server_listener, err := net.Listen("tcp", "192.168.0.8:8848")
+	//server_listener, err := net.Listen("tcp", "127.0.0.1:8848")
 
 	CheckError(err)
 
@@ -138,9 +276,7 @@ func main() {
 
 		go ServerMsgHandler(new_conn)
 	}
-
 }
-
 func getConn() {
 	http.HandleFunc("/", sayhelloName)
 	err := http.ListenAndServe(":8849", nil)
@@ -163,6 +299,7 @@ func sayhelloName(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	key := ""
 	value := ""
+	sign := 0
 	for k, v := range r.Form {
 		if k != "" && strings.Join(v, "") != "" {
 			key = k
@@ -197,36 +334,64 @@ func sayhelloName(w http.ResponseWriter, r *http.Request) {
 		}
 
 		fmt.Fprintf(w, `{"Agent":"`+ll+`"}`)
-	}
+	} else if key == "key" && strings.Count(value, "")-1 >= 4 {
+		if protocol.Substr2(value, 0, 4) == "stop" {
+			sign = 1
+			ip := protocol.Substr2(value, 4, len(value))
 
-	//令agent停止命令
-	if key == "key" && protocol.Substr2(value, 0, 4) == "stop" {
+			log.Println("-----------------------------")
+			log.Println(clientArr)
 
-		ip := protocol.Substr2(value, 4, len(value))
+			findConn := clientArr[ip]
 
-		log.Println("-----------------------------")
-		log.Println(clientArr)
+			go StopClient(findConn)
 
-		findConn := clientArr[ip]
+			fmt.Fprintf(w, "1")
+		}
 
-		go StopClient(findConn)
+		if strings.Count(value, "")-1 >= 5 && sign == 0 {
+			if protocol.Substr2(value, 0, 5) == "start" {
+				sign = 1
+				ip := protocol.Substr2(value, 5, len(value))
 
-		fmt.Fprintf(w, "1")
-	}
+				log.Println("-----------------------------")
+				log.Println(clientArr)
 
-	//令agentkaiq
-	if key == "key" && protocol.Substr2(value, 0, 5) == "start" {
+				findConn := clientArr[ip]
 
-		ip := protocol.Substr2(value, 5, len(value))
+				go BeginClient(findConn)
 
-		log.Println("-----------------------------")
-		log.Println(clientArr)
+				fmt.Fprintf(w, "1")
+			}
+		}
 
-		findConn := clientArr[ip]
+		if strings.Count(value, "")-1 >= 10 && sign == 0 {
+			if protocol.Substr2(value, 0, 10) == "getiprange" {
+				log.Println("服务端请求当前扫描的IPRange")
+				ip := protocol.Substr2(value, 10, len(value))
+				log.Println("服务端接收到ip:")
+				log.Println(ip)
+				fmt.Println(clientArr)
+				fmt.Println(ipRangeArr)
+				if _, ok := ipRangeArr[ip]; ok {
+					go IPRangeClient(clientArr[ip])
+				}
+				if len(ipRangeArr) > 0 {
+					//by, err := json.Marshal(ipRangeArr)
+					//if err != nil {
+					//	log.Println(err)
+					//}
+					//fmt.Fprintf(w, string(by))
+					if _, ok := ipRangeArr[ip]; ok {
+						fmt.Fprintf(w, `{"IPrange":"`+ipRangeArr[ip]+`"}`)
+					}
 
-		go StopClient(findConn)
+				} else {
+					fmt.Fprintf(w, `{"IPrange":"`+`"}`)
+				}
 
-		fmt.Fprintf(w, "1")
+			}
+		}
 	}
 }
 
@@ -266,6 +431,15 @@ func ServerMsgHandler(conn net.Conn) {
 		json.Unmarshal([]byte(string(tmpbuf)), &agentmsg)
 		Msg := tmpbuf
 		log.Println(agentmsg.Status)
+		if agentmsg.Status == "STOPPED" {
+			removeClient(conn)
+		}
+
+		if agentmsg.Status == "IPRange" {
+			log.Println("Agent.Sattus")
+			IPRange1 = agentmsg.Message
+			ipRangeArr[agentmsg.IP] = agentmsg.Message
+		}
 
 		//向客户端发送消息
 		go WriteMsgToClient(conn)
@@ -275,8 +449,6 @@ func ServerMsgHandler(conn net.Conn) {
 				WriteMsgToClient2(conn)
 			}
 		}()
-
-
 
 		beatch := make(chan byte)
 		//心跳计时，默认30秒
@@ -322,6 +494,19 @@ func StopClient(conn net.Conn) {
 	conn.Write(smsg)
 }
 
+//Server表示不想跟您通信咯
+func BeginClient(conn net.Conn) {
+	talk := "BEGIN"
+	smsg := protocol.Enpack([]byte(talk))
+	conn.Write(smsg)
+}
+
+func IPRangeClient(conn net.Conn) {
+	talk := "IPRANGE"
+	smsg := protocol.Enpack([]byte(talk))
+	conn.Write(smsg)
+}
+
 //处理心跳channel
 func HeartChanHandler(n []byte, beatch chan byte) {
 	for _, v := range n {
@@ -345,7 +530,16 @@ func ReadChan(readchan chan []byte) {
 func removeClient(new_conn net.Conn) {
 	log.Println(clientArr)
 	log.Println(new_conn.RemoteAddr().String() + " 已经阵亡")
-	delete(clientArr, new_conn.RemoteAddr().String())
+
+	clientIPList := strings.Split(new_conn.RemoteAddr().String(), ":")
+
+	clientIP := new_conn.RemoteAddr().String()
+	if len(clientIPList) > 0 {
+		clientIP = clientIPList[0]
+	}
+	log.Println(clientIP)
+
+	delete(clientArr, clientIP)
 	log.Println("delete close conn")
 	log.Println(clientArr)
 	return
