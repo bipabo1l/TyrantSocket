@@ -77,12 +77,14 @@
             }
 
             if (layEvent === 'look') {
-                $.get('/agentiprange/' + data.agent, function (d) {
-                    layer.open({
-                        title: data.agent + " current run ip"
-                        , content: d.data.iprange
+                if (data.status == 'Running') {
+                    $.get('/agentiprange/' + data.agent, function (d) {
+                        layer.open({
+                            title: data.agent + " current run ip"
+                            , content: d.data.iprange
+                        });
                     });
-                });
+                }
             }
         });
     });

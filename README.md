@@ -20,7 +20,10 @@ go run client/agent.go
 
 示例
 
-![image](https://raw.githubusercontent.com/bipabo1l/TyrantSocket/master/pic/pic.png)
+![image](http://ovnsp3bhk.bkt.clouddn.com/Snipaste_2017-11-07_16-15-17.png)
 
 2017-10-27
 v1.1 支持web页面查看当前开放的agent
+
+v1.2 可以查看当前开放的agent正在扫描的ip段信息
+
