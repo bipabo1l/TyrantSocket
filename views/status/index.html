@@ -13,6 +13,11 @@
 
 </script>
 
+<script type="text/html" id="barDemo2">
+    <a class="layui-btn layui-btn-mini layui-btn-primary" lay-event="look">查看当前扫描内容</a>
+
+</script>
+
 <script>
     layui.use(['element', 'table', 'form', 'laydate', 'laytpl'], function (args) {
         var element = layui.element;
@@ -28,7 +33,8 @@
             , cols: [[
                 {field: 'agent', title: 'agent', width: 187},
                 {field: 'status', title: 'status', width: 187}
-                , {fixed: 'right', width: 260, align: 'right', toolbar: '#barDemo'}
+                , {fixed: 'right', width: 260, align: 'right', toolbar: '#barDemo'},
+                {fixed: 'right', width: 260, align: 'right', toolbar: '#barDemo2'}
             ]]
             , id: 'eventListReload'
             , page: true
@@ -67,6 +73,15 @@
                         }
                     });
                 }, function () {
+                });
+            }
+
+            if (layEvent === 'look') {
+                $.get('/agentiprange/' + data.agent, function (d) {
+                    layer.open({
+                        title: data.ip + " current run ip"
+                        , content: d.data.iprange
+                    });
                 });
             }
         });
